@@ -500,9 +500,7 @@ typedef struct
 
 #endif /*(APP_NUM_SRC_PAC_RECORDS > 0)*/
 
-#if (APP_CSIP_ROLE_SET_MEMBER_SUPPORT)
-  uint8_t                       CSIPRank;
-#endif /* (APP_CSIP_ROLE_SET_MEMBER_SUPPORT) */
+uint8_t CSIPRank;
 
 #if ((APP_TMAP_ROLE & TMAP_ROLE_BROADCAST_MEDIA_RECEIVER) == TMAP_ROLE_BROADCAST_MEDIA_RECEIVER)
   APP_BNSK_Context_t            BSNK;

@@ -25,6 +25,7 @@
 #include "main.h"
 #include "app_entry.h"
 #include "stm32_rtos.h"
+#include "tmap_app.h"
 #if (CFG_LPM_LEVEL != 0)
 #include "stm32_lpm.h"
 #endif /* (CFG_LPM_LEVEL != 0) */
@@ -57,13 +58,7 @@
 #include "codec_mngr.h"
 #include "codec_if.h"
 #include "stm32wbaxx_nucleo.h"
-#if (CFG_LCD_SUPPORTED == 1)
-#include "stm32wba55g_discovery_lcd.h"
-#include "stm32_lcd.h"
-#endif /* CFG_LCD_SUPPORTED */
 #include "stm32_lpm.h"
-#include "app_menu.h"
-#include "app_menu_cfg.h"
 #if(CFG_RT_DEBUG_DTB == 1)
 #include "RTDebug_dtb.h"
 #endif /* CFG_RT_DEBUG_DTB */
@@ -190,7 +185,6 @@ int PKACTRL_ReleaseSemEndOfOperation(void);
 static void Init_AudioBuffer(uint8_t *pSnkBuff, uint16_t SnkBuffLen, uint8_t *pSrcBuff, uint16_t SrcBuffLen);
 static void AudioClock_Deinit(void);
 static void PLL_Ready_Task(void);
-static void BSP_MIC_Gain_Init(uint8_t mode);
 
 /* USER CODE END PFP */
 
@@ -741,27 +735,6 @@ HAL_StatusTypeDef MX_SAI1_ClockConfig(SAI_HandleTypeDef *hsai, uint32_t SampleRa
   return HAL_OK;
 }
 
-/**
-  * @brief Adjust microphone gain using 3 pre-set configuration
-  * @note  To be used at the initialization only, after BSP_AUDIO_xx_Init()
-  * @param mode : value from 0 to 2, 0 for lowest gain and 2 for the highest
-  */
-static void BSP_MIC_Gain_Init(const uint8_t mode)
-{
-  const uint8_t Tab_mic_ctrl[3] =   {0x00, 0x00, 0x03};
-  const uint8_t Tab_attenuator[3] = {0xE7, 0xF6, 0x00};
-
-  if( mode > 2)
-  {
-    Error_Handler();
-  }
-  else
-  {
-    uint8_t attenuator_gain = Tab_attenuator[mode];
-    uint8_t mic_control = Tab_mic_ctrl[mode];
-  }
-}
-
 void MX_AudioInit(Audio_Role_t role,
                   Sampling_Freq_t sampling_frequency,
                   Frame_Duration_t frame_duration,
@@ -991,39 +964,6 @@ int32_t Start_RxAudio(void)
     Audio_Role_t Audio_Role = TMAPAPP_Context.audio_role_setup;
 
     LOG_INFO_APP("START AUDIO SOURCE (input)\n");
-
-#if (CFG_LCD_SUPPORTED == 1)
-    switch (TMAPAPP_Context.ConfiguredSampleFrequency)
-    {
-      case SAMPLE_FREQ_8000_HZ:
-        Menu_SetStreamingPage("8KHz", Audio_Role);
-        break;
-
-      case SAMPLE_FREQ_16000_HZ:
-        Menu_SetStreamingPage("16KHz", Audio_Role);
-        break;
-
-      case SAMPLE_FREQ_24000_HZ:
-        Menu_SetStreamingPage("24KHz", Audio_Role);
-        break;
-
-      case SAMPLE_FREQ_32000_HZ:
-        Menu_SetStreamingPage("32KHz", Audio_Role);
-        break;
-
-      case SAMPLE_FREQ_44100_HZ:
-        Menu_SetStreamingPage("44.1KHz", Audio_Role);
-        break;
-
-      case SAMPLE_FREQ_48000_HZ:
-        Menu_SetStreamingPage("48KHz", Audio_Role);
-        break;
-
-      default:
-        Menu_SetStreamingPage("Unknown Frequency", Audio_Role);
-        break;
-    }
-#endif /* (CFG_LCD_SUPPORTED == 1) */
   }
   return status;
 }

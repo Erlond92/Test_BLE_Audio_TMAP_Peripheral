@@ -28,11 +28,9 @@ add_executable(${CMAKE_PROJECT_NAME}
         STM32_WPAN/Target/codec_if.c
         STM32_WPAN/Target/ble_codec.c
         STM32_WPAN/App/tmap_app.c
-        STM32_WPAN/App/app_menu_cfg.c
         STM32_WPAN/App/AudioUseCases/usecase_dev_mgmt.c
         STM32_WPAN/App/AudioUseCases/tmap/tmap.c
         STM32_WPAN/App/AudioUseCases/tmap/tmap_db.c
-        STM32_WPAN/App/app_menu.c
         STM32_WPAN/App/AudioUseCases/tmap/tmas.c
         STM32_WPAN/App/AudioUseCases/tmap/tmap_alloc.c
         STM32_WPAN/Target/ble_audio_plat.c

@@ -37,9 +37,9 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /*Audio Profiles Roles configuration*/
-#define APP_TMAP_ROLE                                   (TMAP_ROLE_CALL_TERMINAL | TMAP_ROLE_UNICAST_MEDIA_RECEIVER | TMAP_ROLE_BROADCAST_MEDIA_RECEIVER)
+#define APP_TMAP_ROLE                                   (0u)
 #define APP_CAP_ROLE                                    (CAP_ROLE_ACCEPTOR)
-#define APP_AUDIO_ROLE                                  (AUDIO_ROLE_SOURCE | AUDIO_ROLE_SINK)
+#define APP_AUDIO_ROLE                                  (AUDIO_ROLE_SOURCE)
 
 #if ((APP_TMAP_ROLE & TMAP_ROLE_UNICAST_MEDIA_RECEIVER) == TMAP_ROLE_UNICAST_MEDIA_RECEIVER)
 #if ((APP_AUDIO_ROLE & AUDIO_ROLE_SINK) == 0u)
@@ -65,51 +65,30 @@ extern "C" {
 #endif /*((APP_AUDIO_ROLE & AUDIO_ROLE_SINK) == 0u)*/
 #endif /*(APP_TMAP_ROLE & TMAP_ROLE_BROADCAST_MEDIA_RECEIVER) == TMAP_ROLE_BROADCAST_MEDIA_RECEIVER)*/
 
-#define GAP_APPEARANCE_EARBUD                           (0x0941u)
-#define GAP_APPEARANCE_HEADPHONES                       (0x0943u)
+#define GAP_APPEARANCE_EARBUD                           (0x0840u)
+#define GAP_APPEARANCE_HEADPHONES                       (0x0840u)
 
-#if ((APP_TMAP_ROLE & (TMAP_ROLE_CALL_TERMINAL | TMAP_ROLE_UNICAST_MEDIA_RECEIVER)) != 0)
 #define APP_BAP_ROLE_UNICAST_SERVER_SUPPORT             (1u)
-#else /*((APP_TMAP_ROLE & (TMAP_ROLE_CALL_TERMINAL | TMAP_ROLE_UNICAST_MEDIA_RECEIVER)) != 0)*/
-#define APP_BAP_ROLE_UNICAST_SERVER_SUPPORT             (0u)
-#endif /*((APP_TMAP_ROLE & (TMAP_ROLE_CALL_TERMINAL | TMAP_ROLE_UNICAST_MEDIA_RECEIVER)) != 0)*/
 #define APP_BAP_ROLE_UNICAST_CLIENT_SUPPORT             (0u)
 #define APP_BAP_ROLE_BROADCAST_SOURCE_SUPPORT           (0u)
-#if ((APP_TMAP_ROLE & TMAP_ROLE_BROADCAST_MEDIA_RECEIVER) == TMAP_ROLE_BROADCAST_MEDIA_RECEIVER)
-#define APP_BAP_ROLE_BROADCAST_SINK_SUPPORT             (1u)
-#define APP_BAP_ROLE_SCAN_DELEGATOR_SUPPORT             (1u)
-#else /*(APP_TMAP_ROLE & TMAP_ROLE_BROADCAST_MEDIA_RECEIVER) == TMAP_ROLE_BROADCAST_MEDIA_RECEIVER)*/
 #define APP_BAP_ROLE_BROADCAST_SINK_SUPPORT             (0u)
 #define APP_BAP_ROLE_SCAN_DELEGATOR_SUPPORT             (0u)
-#endif /*(APP_TMAP_ROLE & TMAP_ROLE_BROADCAST_MEDIA_RECEIVER) == TMAP_ROLE_BROADCAST_MEDIA_RECEIVER)*/
 #define APP_BAP_ROLE_BROADCAST_ASSISTANT_SUPPORT        (0u)
 
 #define APP_CCP_ROLE_SERVER_SUPPORT                     (0u)
-#define APP_CCP_ROLE_CLIENT_SUPPORT                     (1u)
+#define APP_CCP_ROLE_CLIENT_SUPPORT                     (0u)
 
 #define APP_MCP_ROLE_SERVER_SUPPORT                     (0u)
-#define APP_MCP_ROLE_CLIENT_SUPPORT                     (1u)
+#define APP_MCP_ROLE_CLIENT_SUPPORT                     (0u)
 
 #define APP_VCP_ROLE_CONTROLLER_SUPPORT                 (0u)
-#if ((APP_TMAP_ROLE & TMAP_ROLE_CALL_TERMINAL) == TMAP_ROLE_CALL_TERMINAL)
-#if ((APP_AUDIO_ROLE & AUDIO_ROLE_SINK) == AUDIO_ROLE_SINK)
-#define APP_VCP_ROLE_RENDERER_SUPPORT                   (1u)
-#else
 #define APP_VCP_ROLE_RENDERER_SUPPORT                   (0u)
-#endif /*((APP_AUDIO_ROLE & AUDIO_ROLE_SINK) == AUDIO_ROLE_SINK)*/
-#endif /*((APP_TMAP_ROLE & TMAP_ROLE_CALL_TERMINAL) == TMAP_ROLE_CALL_TERMINAL)*/
-#if (((APP_TMAP_ROLE & TMAP_ROLE_UNICAST_MEDIA_RECEIVER) == TMAP_ROLE_UNICAST_MEDIA_RECEIVER) \
-    || ((APP_TMAP_ROLE & TMAP_ROLE_BROADCAST_MEDIA_RECEIVER) == TMAP_ROLE_BROADCAST_MEDIA_RECEIVER))
-#undef APP_VCP_ROLE_RENDERER_SUPPORT
-#define APP_VCP_ROLE_RENDERER_SUPPORT                   (1u)
-#endif /*(((APP_TMAP_ROLE & TMAP_ROLE_UNICAST_MEDIA_RECEIVER) == TMAP_ROLE_UNICAST_MEDIA_RECEIVER) \
-          || ((APP_TMAP_ROLE & TMAP_ROLE_BROADCAST_MEDIA_RECEIVER) == TMAP_ROLE_BROADCAST_MEDIA_RECEIVER))*/
 
 #define APP_MICP_ROLE_CONTROLLER_SUPPORT                (0u)
 #define APP_MICP_ROLE_DEVICE_SUPPORT                    (0u)
 
 #define APP_CSIP_ROLE_SET_COORDINATOR_SUPPORT           (0u)
-#define APP_CSIP_ROLE_SET_MEMBER_SUPPORT                (1u)
+#define APP_CSIP_ROLE_SET_MEMBER_SUPPORT                (0u)
 
 /**
  * Maximum Number of Bonded Devices to store in Non-Volatile Memory
@@ -264,7 +243,7 @@ extern "C" {
 #define APP_MAX_CHANNEL_PER_SRC_ASE             (0u)    /* Maximum number of channels per Source ASE */
 #endif /* ((APP_AUDIO_ROLE & AUDIO_ROLE_SOURCE) == AUDIO_ROLE_SOURCE) */
 
-#if ((APP_TMAP_ROLE & (TMAP_ROLE_CALL_TERMINAL | TMAP_ROLE_UNICAST_MEDIA_RECEIVER)) != 0)
+#ifndef MAX_USR_METADATA_SIZE
 #define MAX_USR_METADATA_SIZE                   (10u)   /* Maximum size of the Metadata for each Audio Stream Endpoint supported by Unicast Server */
 #endif /* ((APP_TMAP_ROLE & (TMAP_ROLE_CALL_TERMINAL | TMAP_ROLE_UNICAST_MEDIA_RECEIVER)) != 0))*/
 
