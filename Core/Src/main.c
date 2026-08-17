@@ -481,8 +481,8 @@ void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
   LL_DBGMCU_DisableDBGStopMode();
@@ -492,90 +492,6 @@ void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-HAL_StatusTypeDef MX_SPI3_Init(SPI_HandleTypeDef* phspi, uint32_t BaudratePrescaler)
-{
-  HAL_StatusTypeDef ret = HAL_OK;
-
-  phspi->Init.Mode                    = SPI_MODE_MASTER;
-  phspi->Init.Direction               = SPI_DIRECTION_1LINE;
-  phspi->Init.DataSize                = SPI_DATASIZE_8BIT;
-  phspi->Init.CLKPolarity             = SPI_POLARITY_LOW;
-  phspi->Init.CLKPhase                = SPI_PHASE_1EDGE;
-  phspi->Init.NSS                     = SPI_NSS_SOFT;
-  phspi->Init.BaudRatePrescaler       = SPI_BAUDRATEPRESCALER_4;
-  phspi->Init.FirstBit                = SPI_FIRSTBIT_MSB;
-  phspi->Init.TIMode                  = SPI_TIMODE_DISABLE;
-  phspi->Init.CRCCalculation          = SPI_CRCCALCULATION_DISABLE;
-  phspi->Init.CRCPolynomial           = 7;
-  phspi->Init.NSSPMode                = SPI_NSS_PULSE_DISABLE;
-  phspi->Init.NSSPolarity             = SPI_NSS_POLARITY_LOW;
-  phspi->Init.FifoThreshold           = SPI_FIFO_THRESHOLD_01DATA;
-  phspi->Init.MasterSSIdleness        = SPI_MASTER_SS_IDLENESS_00CYCLE;
-  phspi->Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_00CYCLE;
-  phspi->Init.MasterReceiverAutoSusp  = SPI_MASTER_RX_AUTOSUSP_DISABLE;
-  phspi->Init.MasterKeepIOState       = SPI_MASTER_KEEP_IO_STATE_DISABLE;
-  phspi->Init.IOSwap                  = SPI_IO_SWAP_DISABLE;
-  phspi->Init.ReadyMasterManagement   = SPI_RDY_MASTER_MANAGEMENT_INTERNALLY;
-  phspi->Init.ReadyPolarity           = SPI_RDY_POLARITY_HIGH;
-
-  if (HAL_SPI_Init(phspi) != HAL_OK)
-  {
-    ret = HAL_ERROR;
-  }
-
-  return ret;
-}
-
-#if (CFG_JOYSTICK_SUPPORTED == 1)
-HAL_StatusTypeDef MX_ADC4_Init(ADC_HandleTypeDef* hadc, MX_ADC_Config_t *MXInit)
-{
-  HAL_StatusTypeDef status = HAL_ERROR;
-
-  if (MXInit->ContinuousConvMode == ENABLE)
-  {
-     /* configuration with high speed conversion not suitable for continuous mode */
-     Error_Handler();
-  }
-
-  /* ADC Config */
-  hadc->Init.ClockPrescaler        = ADC_CLOCK_ASYNC_DIV1;
-  hadc->Init.Resolution            = ADC_RESOLUTION_12B;
-  hadc->Init.DataAlign             = ADC_DATAALIGN_RIGHT;
-  hadc->Init.ScanConvMode          = ADC_SCAN_DISABLE;
-  hadc->Init.EOCSelection          = ADC_EOC_SINGLE_CONV;
-  hadc->Init.LowPowerAutoWait      = DISABLE;
-  hadc->Init.LowPowerAutoPowerOff  = DISABLE;
-  hadc->Init.LowPowerAutonomousDPD = ADC_LP_AUTONOMOUS_DPD_DISABLE;
-  hadc->Init.ContinuousConvMode    = MXInit->ContinuousConvMode;
-  hadc->Init.NbrOfConversion       = 1;
-  hadc->Init.DiscontinuousConvMode = DISABLE;
-  hadc->Init.ExternalTrigConv      = ADC_SOFTWARE_START;
-  hadc->Init.ExternalTrigConvEdge  = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc->Init.DMAContinuousRequests = DISABLE;
-  hadc->Init.Overrun               = ADC_OVR_DATA_OVERWRITTEN;
-  hadc->Init.SamplingTimeCommon1   = ADC_SAMPLETIME_12CYCLES_5;
-  hadc->Init.SamplingTimeCommon2   = ADC_SAMPLETIME_12CYCLES_5;
-  hadc->Init.OversamplingMode      = DISABLE;
-  hadc->Init.TriggerFrequencyMode  = ADC_TRIGGER_FREQ_LOW;
-
-  /* Initialize ADC */
-  if (HAL_ADC_Init(hadc) == HAL_OK)
-  {
-    if (HAL_ADCEx_Calibration_Start(hadc) == HAL_OK)
-    {
-      /* Select the ADC Channel to be converted */
-      ADC_ChannelConfTypeDef sConfig;
-      sConfig.Channel      = JOY1_ADC_CHANNEL;
-      sConfig.Rank         = ADC_REGULAR_RANK_1;
-      sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
-      /* Return Joystick initialization status */
-      status = HAL_ADC_ConfigChannel(hadc, &sConfig);
-    }
-  }
-
-  return status;
-}
-#endif /* CFG_JOYSTICK_SUPPORTED == 1 */
 
 /* USER CODE END 4 */
 

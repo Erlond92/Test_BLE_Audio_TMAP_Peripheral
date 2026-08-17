@@ -550,6 +550,8 @@ typedef enum
 /* USER CODE END MEMORY_MANAGER_Configuration */
 
 /* USER CODE BEGIN Defines */
+#undef STM32WBA55xx
+
 #define CFG_BSP_ON_SEQUENCER                    (1)
 #define CFG_BSP_ON_DISCOVERY                    (0)
 
