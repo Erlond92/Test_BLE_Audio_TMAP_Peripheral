@@ -464,7 +464,7 @@ typedef enum
  *   - 2 : Debugger available in low power mode.
  *
  ******************************************************************************/
-#define CFG_DEBUGGER_LEVEL                  (1)
+#define CFG_DEBUGGER_LEVEL                  (2)
 
 /******************************************************************************
  * RealTime GPIO debug module configuration
@@ -592,7 +592,7 @@ typedef enum
 #define CODEC_LC3_NUM_SESSION                   (1u)
 
 #define CODEC_LC3_NUM_ENCODER_CHANNEL           (1u)
-#define CODEC_LC3_NUM_DECODER_CHANNEL           (2u)
+#define CODEC_LC3_NUM_DECODER_CHANNEL           (0u)
 
 #define CODEC_MNGR_INTR_NUM                     COMP_IRQn      /* Vector used for codec execution */
 #define CODEC_MNGR_INTR_PRIO                    (15)
