@@ -24,6 +24,8 @@ set(MX_Include_Dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../../System/Config/CRC_Ctrl
     ${CMAKE_CURRENT_SOURCE_DIR}/../../STM32_WPAN/App
     ${CMAKE_CURRENT_SOURCE_DIR}/../../STM32_WPAN/Target
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/ST/STM32_WPAN/link_layer/ll_cmd_lib/porting
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/ST/STM32_WPAN/link_layer/ll_cmd_lib/src/shrd_utils/inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32WBAxx_HAL_Driver/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32WBAxx_HAL_Driver/Inc/Legacy
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Utilities/trace/adv_trace
@@ -178,9 +180,11 @@ set(MX_LINK_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/ST/STM32_WPAN/ble/stack/lib
 )
 # Project static libraries
-set(MX_LINK_LIBS  
+set(MX_LINK_LIBS 
+ "-Wl,--start-group" 
 	:WBA5_LinkLayer_BLE_Full_lib.a 
 	:stm32wba_ble_stack_full.a
+ "-Wl,--end-group"
     STM32_Drivers
     ${TOOLCHAIN_LINK_LIBRARIES}
     Utilities	STM32_WPAN	Common	

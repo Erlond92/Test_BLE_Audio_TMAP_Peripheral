@@ -25,7 +25,6 @@
 #include "main.h"
 #include "app_entry.h"
 #include "stm32_rtos.h"
-#include "tmap_app.h"
 #if (CFG_LPM_LEVEL != 0)
 #include "stm32_lpm.h"
 #endif /* (CFG_LPM_LEVEL != 0) */
@@ -63,6 +62,7 @@
 #include "RTDebug_dtb.h"
 #endif /* CFG_RT_DEBUG_DTB */
 
+#include "tmap_app.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
