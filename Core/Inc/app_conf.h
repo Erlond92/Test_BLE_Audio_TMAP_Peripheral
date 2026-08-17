@@ -266,7 +266,13 @@
 #define CFG_LPM_STDBY_WAKEUP_TIME (1500U)
 
 /* USER CODE BEGIN Low_Power 0 */
+#undef CFG_LPM_LEVEL
+#undef CFG_LPM_STOP1_SUPPORTED
+#undef CFG_LPM_STANDBY_SUPPORTED
 
+#define CFG_LPM_LEVEL               (0U)
+#define CFG_LPM_STOP1_SUPPORTED     (0U)
+#define CFG_LPM_STANDBY_SUPPORTED   (0U)
 /* USER CODE END Low_Power 0 */
 
 /**

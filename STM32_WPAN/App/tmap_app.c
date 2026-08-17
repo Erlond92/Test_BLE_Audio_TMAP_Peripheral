@@ -29,6 +29,7 @@
 #include "cap.h"
 #include "tmap.h"
 #include "usecase_dev_mgmt.h"
+#include "app_menu_cfg.h"
 #include "log_module.h"
 #include "app_ble.h"
 #include "simple_nvm_arbiter.h"
@@ -445,6 +446,7 @@ void TMAPAPP_Init(uint8_t csip_config_id)
   }
 
   Set_Volume(Volume);
+  Menu_SetVolume(Volume);
 }
 
 tBleStatus TMAPAPP_Linkup(uint16_t ConnHandle)
@@ -712,6 +714,7 @@ uint8_t TMAPAPP_StartAdvertising(CAP_Announcement_t AnnouncementType
   Adv_Data[ADV_AD_FLAGS_LEN+ADV_LOCAL_NAME_LEN-2] = Hex_To_Char((Pb_Addr[0] & 0xF0) >> 4);
   Adv_Data[ADV_AD_FLAGS_LEN+ADV_LOCAL_NAME_LEN-1] = Hex_To_Char(Pb_Addr[0] & 0x0F);
 
+  Menu_SetIdentifier((char *)&Adv_Data[ADV_AD_FLAGS_LEN+2], 14);
 
   /* Start Fast or Low Power Advertising.*/
   if (TMAPAPP_Context.NumConn == 0u)
@@ -1231,6 +1234,7 @@ void TMAPAPP_AclConnected(uint16_t ConnHandle, uint8_t Peer_Address_Type, uint8_
   if (p_conn != 0)
   {
     p_conn->AudioProfile = AUDIO_PROFILE_NONE;
+    Menu_SetProfilesLinked(p_conn->AudioProfile);
     p_conn->CAPLinkupState = APP_CAP_LINKUP_STATE_NONE;
     p_conn->Peer_Address_Type = Peer_Address_Type;
     for (uint8_t i = 0 ; i < 6u; i++)
@@ -1352,6 +1356,7 @@ void TMAPAPP_LinkDisconnected(uint16_t Conn_Handle,uint8_t Reason)
     /*Free CAP Connection Slot*/
     p_conn->Acl_Conn_Handle = 0xFFFFu;
     p_conn->AudioProfile = AUDIO_PROFILE_NONE;
+    Menu_SetProfilesLinked(p_conn->AudioProfile);
     p_conn->CAPLinkupState = APP_CAP_LINKUP_STATE_NONE;
     p_conn->LinkupRetry = 0;
     p_conn->ConfirmIndicationRequired = 0u;
@@ -1585,10 +1590,12 @@ void TMAPAPP_LinkDisconnected(uint16_t Conn_Handle,uint8_t Reason)
         status = TMAPAPP_StartAdvertising(CAP_GENERAL_ANNOUNCEMENT, enable_solicitation_request, GAP_APPEARANCE_HEADPHONES);
       }
       LOG_INFO_APP("TMAPAPP_StartAdvertising() returns status 0x%02X\n",status);
+      Menu_SetWaitConnPage();
     }
     else
     {
       TMAPAPP_StopAdvertising();
+      Menu_SetStartupPage();
     }
     UNUSED(status);
   }
@@ -1605,6 +1612,9 @@ void TMAPAPP_LinkDisconnected(uint16_t Conn_Handle,uint8_t Reason)
         {
           LOG_INFO_APP("Deinitialized Audio Peripherals\n");
           MX_AudioDeInit();
+#if (CFG_LCD_SUPPORTED == 1)
+          Menu_SetNoStreamPage();
+#endif /* (CFG_LCD_SUPPORTED == 1) */
           /*check if a response to an Enable operation Request is suspended with another CAP Initiator*/
           for (uint8_t conn = 0u; conn < CFG_BLE_NUM_LINK ; conn++)
           {
@@ -2138,6 +2148,9 @@ static tBleStatus CAPAPP_Init(Audio_Role_t AudioRole, uint8_t csip_config_id)
   }
 
   /*Initialize Flags of the APP Context*/
+  TMAPAPP_Context.audio_role_setup = 0x00;
+  TMAPAPP_Context.num_cis_src = 0;
+  TMAPAPP_Context.num_cis_snk = 0;
   TMAPAPP_Context.audio_role_setup = 0x00;
   TMAPAPP_Context.num_cis_src = 0;
   TMAPAPP_Context.num_cis_snk = 0;
@@ -3891,6 +3904,7 @@ static void TMAPAPP_CAPNotification(CAP_Notification_Evt_t *pNotification)
           LOG_INFO_APP("No more Output Audio Data Path is up\n");
           TMAPAPP_Context.audio_role_setup &= ~AUDIO_ROLE_SINK;
           LOG_INFO_APP("Stop Tx Audio Peripheral Driver\n");
+          Stop_TxAudio();
         }
       }
       break;
@@ -3938,6 +3952,7 @@ static void TMAPAPP_CAPNotification(CAP_Notification_Evt_t *pNotification)
       if ((p_conn != 0) && (pNotification->Status == BLE_STATUS_SUCCESS))
       {
         p_conn->AudioProfile |= AUDIO_PROFILE_MCP;
+        Menu_SetProfilesLinked(p_conn->AudioProfile);
       }
     }
     break;
@@ -4046,6 +4061,7 @@ static void TMAPAPP_CAPNotification(CAP_Notification_Evt_t *pNotification)
       if ((p_conn != 0) && (pNotification->Status == BLE_STATUS_SUCCESS))
       {
         p_conn->AudioProfile |= AUDIO_PROFILE_CCP;
+        Menu_SetProfilesLinked(p_conn->AudioProfile);
       }
     }
     break;
@@ -4130,18 +4146,33 @@ static void TMAPAPP_CAPNotification(CAP_Notification_Evt_t *pNotification)
           break;
         }
       }
+
+      if (TMAPAPP_Context.BroadcastMode == APP_BROADCAST_MODE_SINK_ONLY)
+      {
+        Menu_SetBroadcastSyncedPage(freq_text);
+      }
+      else
+      {
+        Menu_SetScanDelegSyncedPage(freq_text);
+      }
     }
     break;
 
     case CAP_BROADCAST_AUDIO_DOWN_EVT:
     {
       LOG_INFO_APP(">>== CAP_BROADCAST_AUDIO_DOWN_EVT\n");
+      Stop_TxAudio();
       MX_AudioDeInit();
 
       if (TMAPAPP_Context.BroadcastMode == APP_BROADCAST_MODE_SINK_ONLY)
       {
+        Menu_SetBroadcastScanPage();
         TMAPAPP_StopSink();
         TMAPAPP_StartSink();
+      }
+      else
+      {
+        Menu_SetNoStreamPage();
       }
     }
     break;
@@ -4202,6 +4233,14 @@ static void TMAPAPP_CAPNotification(CAP_Notification_Evt_t *pNotification)
           UTIL_MEM_cpy_8(&name[0], bid, 11);
           name[11] = '\0';
         }
+#if (CFG_TEST_VALIDATION == 1u)
+        if (memcmp(&name[0], "TMAP_WBA", 8u) != 0)
+        {
+          return;
+        }
+#endif /*(CFG_TEST_VALIDATION == 1u)*/
+        Menu_AddBroadcastSource(data->AdvSID, (uint8_t *) &data->pAdvAddress[0],
+                                data->AdvAddressType, &name[0]);
       }
     }
     break;
@@ -4489,6 +4528,7 @@ static void TMAPAPP_CAPNotification(CAP_Notification_Evt_t *pNotification)
         {
           LOG_INFO_APP("  Success: CAP_Broadcast_StartBIGSync() function\n");
           TMAPAPP_Context.BSNK.BIGSyncState = APP_BIG_SYNC_STATE_SYNCHRONIZING;
+          Menu_SetBISSyncPage();
         }
       }
       break;
@@ -4532,8 +4572,13 @@ static void TMAPAPP_CAPNotification(CAP_Notification_Evt_t *pNotification)
           TMAPAPP_Context.BSNK.BIGSyncState = APP_BIG_SYNC_STATE_IDLE;
           if (TMAPAPP_Context.BroadcastMode == APP_BROADCAST_MODE_SINK_ONLY)
           {
+            Menu_SetBroadcastScanPage();
             TMAPAPP_StopSink();
             TMAPAPP_StartSink();
+          }
+          else
+          {
+            Menu_SetNoStreamPage();
           }
         }
       }
@@ -5425,7 +5470,7 @@ static int32_t start_audio_sink(void)
   /* reset numbers of active channels */
   Nb_Active_Ch = 0;
 
-  return 0;
+  return Start_TxAudio();
 }
 
 #if (APP_CCP_ROLE_CLIENT_SUPPORT == 1u)
@@ -5454,12 +5499,14 @@ static void CCP_MetaEvt_Notification(CCP_Notification_Evt_t *pNotification)
           LOG_INFO_APP("Call %d is terminated on Telephone Bearer ID %d\n",
                       cs_params->CallIdx,
                       pNotification->ContentControlID);
+          Menu_SetCallState("IDLE");
         break;
 
         case CCP_CS_INCOMING:
           LOG_INFO_APP("Call %d is Incoming : A remote party is calling on Telephone Bearer ID %d\n",
                       cs_params->CallIdx,
                       pNotification->ContentControlID);
+          Menu_SetCallState("INCOMING");
           if ((p_conn != 0) && ((p_conn->CurrentContentCtrlOp & CCP_CLT_OP_READ_FEATURES_STATUS) == 0) \
               && ((p_conn->PendingContentCtrlOp & CCP_CLT_OP_READ_FEATURES_STATUS) == 0))
           {
@@ -5489,6 +5536,7 @@ static void CCP_MetaEvt_Notification(CCP_Notification_Evt_t *pNotification)
           LOG_INFO_APP("Call %d is dialing on Telephone Bearer ID %d (remote party not already alerted)\n",
                        cs_params->CallIdx,
                        pNotification->ContentControlID);
+          Menu_SetCallState("DIALING");
           if ((p_conn != 0) && ((p_conn->CurrentContentCtrlOp & CCP_CLT_OP_READ_FEATURES_STATUS) == 0) \
               && ((p_conn->PendingContentCtrlOp & CCP_CLT_OP_READ_FEATURES_STATUS) == 0))
           {
@@ -5518,30 +5566,35 @@ static void CCP_MetaEvt_Notification(CCP_Notification_Evt_t *pNotification)
           LOG_INFO_APP("remote party is being alerted on connectio handle 0x%04X on Telephone Bearer ID %d\n",
                       pNotification->ConnHandle,
                       pNotification->ContentControlID);
+          Menu_SetCallState("ALERTING");
         break;
 
         case CCP_CS_ACTIVE:
           LOG_INFO_APP("Call %d is active on Telephone Bearer ID %d\n",
                       cs_params->CallIdx,
                       pNotification->ContentControlID);
+          Menu_SetCallState("ACTIVE");
         break;
 
         case CCP_CS_LOCALLY_HELD:
           LOG_INFO_APP("Call %d is connected but held locally on Telephone Bearer ID %d\n",
                       cs_params->CallIdx,
                       pNotification->ContentControlID);
+          Menu_SetCallState("HELD");
         break;
 
         case CCP_CS_REMOTELY_HELD:
           LOG_INFO_APP("Call %d is connected but held remotely on Telephone Bearer ID %d\n",
                       cs_params->CallIdx,
                       pNotification->ContentControlID);
+          Menu_SetCallState("HELD");
         break;
 
         case CCP_CS_LOCALLY_REMOTELY_HELD:
           LOG_INFO_APP("Call %d is connected but held locally and remotely on Telephone Bearer ID %d\n",
                       cs_params->CallIdx,
                       pNotification->ContentControlID);
+          Menu_SetCallState("HELD");
         break;
       }
       LOG_INFO_APP("     Call Flags : 0x%02X\n",cs_params->CallFlags);
@@ -6195,6 +6248,7 @@ static void MCP_MetaEvt_Notification(MCP_Notification_Evt_t *pNotification)
       LOG_INFO_APP(" (offset %d, length %d)\n",
                   p_event_params->Offset,
                   p_event_params->TitleLength);
+      Menu_SetTrackTitle(p_event_params->pTitle, p_event_params->TitleLength);
       break;
     }
 
@@ -6268,8 +6322,33 @@ static void MCP_MetaEvt_Notification(MCP_Notification_Evt_t *pNotification)
                   p_event_params->MediaState);
 
       APP_ACL_Conn_t *p_conn = APP_GetACLConn(pNotification->ConnHandle);
-      if (p_conn != 0) {
+      if (p_conn != 0)
+      {
         p_conn->MediaState = p_event_params->MediaState;
+      }
+
+      switch (p_event_params->MediaState)
+      {
+        case MCP_MEDIA_STATE_INACTIVE:
+        {
+          Menu_SetMediaState("INACTIVE");
+        }
+        break;
+        case MCP_MEDIA_STATE_PAUSED:
+        {
+          Menu_SetMediaState("PAUSED");
+        }
+        break;
+        case MCP_MEDIA_STATE_PLAYING:
+        {
+          Menu_SetMediaState("PLAYING");
+        }
+        break;
+        case MCP_MEDIA_STATE_SEEKING:
+        {
+          Menu_SetMediaState("SEEKING");
+        }
+        break;
       }
 
       break;
@@ -6451,10 +6530,12 @@ static void VCP_MetaEvt_Notification(VCP_Notification_Evt_t *pNotification)
       Mute = p_info->Mute;
       if (Mute == 0)
       {
+        Menu_SetVolume(Volume);
         Set_Volume(Volume);
       }
       else
       {
+        Menu_SetVolume(0);
         Set_Volume(0);
       }
       break;

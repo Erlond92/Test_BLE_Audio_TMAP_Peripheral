@@ -31,6 +31,10 @@
 #include "stm32_timer.h"
 #include "advanced_memory_manager.h"
 #include "stm32_mm.h"
+#if (CFG_LOG_SUPPORTED != 0)
+#include "stm32_adv_trace.h"
+#include "serial_cmd_interpreter.h"
+#endif /* CFG_LOG_SUPPORTED */
 #include "app_ble.h"
 #include "ll_sys.h"
 #include "ll_sys_if.h"
@@ -42,13 +46,27 @@
 #include "flash_manager.h"
 #include "simple_nvm_arbiter.h"
 #include "app_debug.h"
+#if(CFG_RT_DEBUG_DTB == 1)
+#include "RTDebug_dtb.h"
+#endif /* CFG_RT_DEBUG_DTB */
 #include "stm32_lpm_if.h"
 
 /* Private includes -----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "app_bsp.h"
 #include "codec_mngr.h"
 #include "codec_if.h"
+#include "stm32wbaxx_nucleo.h"
+#if (CFG_LCD_SUPPORTED == 1)
+#include "stm32wba55g_discovery_lcd.h"
+#include "stm32_lcd.h"
+#endif /* CFG_LCD_SUPPORTED */
+#include "stm32_lpm.h"
+#include "app_menu.h"
 #include "app_menu_cfg.h"
+#if(CFG_RT_DEBUG_DTB == 1)
+#include "RTDebug_dtb.h"
+#endif /* CFG_RT_DEBUG_DTB */
 
 /* USER CODE END Includes */
 
@@ -134,6 +152,7 @@ static uint8_t MxAudioInit_Flag = 0;
 uint32_t Sink_frame_size = 0;
 uint32_t Source_frame_size = 0;
 static uint8_t Record_Req_Pause = 0;
+static uint8_t Play_Req_Pause = 0;
 static uint32_t Current_Volume = 50;
 #if (CFG_TEST_VALIDATION == 1u)
 JOYPin_TypeDef Joy_PreviousState = JOY_NONE;
@@ -145,6 +164,7 @@ JOYPin_TypeDef Joy_PreviousState = JOY_NONE;
 /* USER CODE BEGIN GV */
 uint32_t gDefault_Exec_Time = 0; /* effective default exec time */
 SAI_HandleTypeDef                      haudio_in_sai = {NULL};
+SAI_HandleTypeDef                      haudio_out_sai = {NULL};
 /* USER CODE END GV */
 
 /* Private functions prototypes-----------------------------------------------*/
@@ -170,6 +190,7 @@ int PKACTRL_ReleaseSemEndOfOperation(void);
 static void Init_AudioBuffer(uint8_t *pSnkBuff, uint16_t SnkBuffLen, uint8_t *pSrcBuff, uint16_t SrcBuffLen);
 static void AudioClock_Deinit(void);
 static void PLL_Ready_Task(void);
+static void BSP_MIC_Gain_Init(uint8_t mode);
 
 /* USER CODE END PFP */
 
@@ -215,6 +236,10 @@ uint32_t MX_APPE_Init(void *p_param)
   APPE_FLASH_MANAGER_Init();
 
   /* USER CODE BEGIN APPE_Init_1 */
+
+#if (CFG_LCD_SUPPORTED == 1)
+  UTIL_SEQ_RegTask(1U << CFG_TASK_MENU_PRINT_ID, UTIL_SEQ_RFU, Menu_Print_Task);
+#endif /* CFG_LCD_SUPPORTED */
 
   UTIL_SEQ_RegTask(1U << CFG_TASK_PLL_READY_ID, UTIL_SEQ_RFU, PLL_Ready_Task);
 
@@ -455,6 +480,122 @@ static void APPE_AMM_Init(void)
 }
 
 /* USER CODE BEGIN FD_LOCAL_FUNCTIONS */
+#if (CFG_JOYSTICK_SUPPORTED == 1)
+/**
+ * @brief  Action of Joystick NONE when Joystick state changes to None state, to be implemented by user.
+ * @param  None
+ * @retval None
+ */
+void APP_BSP_JoystickNoneAction( void )
+{
+#if (CFG_TEST_VALIDATION == 1u)
+  LOG_INFO_APP("JOY_NONE\n");
+  Joy_PreviousState = JOY_NONE;
+#endif /*(CFG_TEST_VALIDATION == 1u)*/
+}
+/**
+ * @brief  Action of Joystick UP when pressed, to be implemented by user.
+ * @param  None
+ * @retval None
+ */
+void APP_BSP_JoystickUpAction( void )
+{
+#if (CFG_TEST_VALIDATION == 1u)
+  if (Joy_PreviousState == JOY_NONE)
+  {
+    LOG_INFO_APP("JOY 0x%02X\nOK\n",JOY_UP);
+    Joy_PreviousState = JOY_UP;
+#endif /*(CFG_TEST_VALIDATION == 1u)*/
+
+    Menu_Up();
+
+#if (CFG_TEST_VALIDATION == 1u)
+  }
+#endif /*(CFG_TEST_VALIDATION == 1u)*/
+}
+
+/**
+ * @brief  Action of Joystick RIGHT when pressed, to be implemented by user.
+ * @param  None
+ * @retval None
+ */
+void APP_BSP_JoystickRightAction( void )
+{
+#if (CFG_TEST_VALIDATION == 1u)
+  if (Joy_PreviousState == JOY_NONE)
+  {
+    LOG_INFO_APP("JOY 0x%02X\nOK\n",JOY_RIGHT);
+    Joy_PreviousState = JOY_RIGHT;
+#endif /*(CFG_TEST_VALIDATION == 1u)*/
+
+    Menu_Right();
+
+#if (CFG_TEST_VALIDATION == 1u)
+  }
+#endif /*(CFG_TEST_VALIDATION == 1u)*/
+}
+
+/**
+ * @brief  Action of Joystick DOWN when pressed, to be implemented by user.
+ * @param  None
+ * @retval None
+ */
+void APP_BSP_JoystickDownAction( void )
+{
+#if (CFG_TEST_VALIDATION == 1u)
+  if (Joy_PreviousState == JOY_NONE)
+  {
+    LOG_INFO_APP("JOY 0x%02X\nOK\n",JOY_DOWN);
+    Joy_PreviousState = JOY_DOWN;
+#endif /*(CFG_TEST_VALIDATION == 1u)*/
+
+    Menu_Down();
+
+#if (CFG_TEST_VALIDATION == 1u)
+  }
+#endif /*(CFG_TEST_VALIDATION == 1u)*/
+}
+
+/**
+ * @brief  Action of Joystick LEFT when pressed, to be implemented by user.
+ * @param  None
+ * @retval None
+ */
+void APP_BSP_JoystickLeftAction( void )
+{
+#if (CFG_TEST_VALIDATION == 1u)
+  if (Joy_PreviousState == JOY_NONE)
+  {
+    LOG_INFO_APP("JOY 0x%02X\nOK\n",JOY_LEFT);
+    Joy_PreviousState = JOY_LEFT;
+#endif /*(CFG_TEST_VALIDATION == 1u)*/
+
+    Menu_Left();
+
+#if (CFG_TEST_VALIDATION == 1u)
+  }
+#endif /*(CFG_TEST_VALIDATION == 1u)*/
+}
+
+/**
+ * @brief  Action of Joystick SELECT when pressed, to be implemented by user.
+ * @param  None
+ * @retval None
+ */
+void APP_BSP_JoystickSelectAction( void )
+{
+#if (CFG_TEST_VALIDATION == 1u)
+  if (Joy_PreviousState == JOY_NONE)
+  {
+    LOG_INFO_APP("JOY 0x%02X\nOK\n",JOY_SEL);
+    Joy_PreviousState = JOY_SEL;
+#endif /*(CFG_TEST_VALIDATION == 1u)*/
+#if (CFG_TEST_VALIDATION == 1u)
+  }
+#endif /*(CFG_TEST_VALIDATION == 1u)*/
+}
+
+#endif  /* CFG_JOYSTICK_SUPPORTED */
 
 /**
   * @brief Configure PLL for the audio frequency, PLL output is used for the SAI peripheral and as the core clock
@@ -600,6 +741,27 @@ HAL_StatusTypeDef MX_SAI1_ClockConfig(SAI_HandleTypeDef *hsai, uint32_t SampleRa
   return HAL_OK;
 }
 
+/**
+  * @brief Adjust microphone gain using 3 pre-set configuration
+  * @note  To be used at the initialization only, after BSP_AUDIO_xx_Init()
+  * @param mode : value from 0 to 2, 0 for lowest gain and 2 for the highest
+  */
+static void BSP_MIC_Gain_Init(const uint8_t mode)
+{
+  const uint8_t Tab_mic_ctrl[3] =   {0x00, 0x00, 0x03};
+  const uint8_t Tab_attenuator[3] = {0xE7, 0xF6, 0x00};
+
+  if( mode > 2)
+  {
+    Error_Handler();
+  }
+  else
+  {
+    uint8_t attenuator_gain = Tab_attenuator[mode];
+    uint8_t mic_control = Tab_mic_ctrl[mode];
+  }
+}
+
 void MX_AudioInit(Audio_Role_t role,
                   Sampling_Freq_t sampling_frequency,
                   Frame_Duration_t frame_duration,
@@ -706,6 +868,7 @@ void MX_AudioDeInit(void)
 
 
     SET_BIT(haudio_in_sai.Instance->CR2, SAI_xCR2_FFLUSH);
+    SET_BIT(haudio_out_sai.Instance->CR2, SAI_xCR2_FFLUSH);
 
   }
 
@@ -716,9 +879,98 @@ static void Init_AudioBuffer(uint8_t *pSnkBuff, uint16_t SnkBuffLen, uint8_t *pS
 {
   /* We start the SAI here but will pause the DMA on the first interrupt.
      The DMA will be relauched synchronized to the BLE transport to master audio latency */
+  if ((SnkBuffLen  > 0) && (pSnkBuff != NULL))
+  {
+    Play_Req_Pause = 1;
+  }
   if ((SrcBuffLen  > 0) && (pSrcBuff != NULL))
   {
     Record_Req_Pause = 1;
+  }
+}
+
+int32_t Start_TxAudio(void)
+{
+  int32_t status = 1;
+
+  /* restart DMA request only if it was on pause */
+  if ((haudio_out_sai.Instance->CR1 & SAI_xCR1_DMAEN) == 0)
+  {
+    SET_BIT(haudio_out_sai.Instance->CR2, SAI_xCR2_FFLUSH);
+    haudio_out_sai.Instance->CR1 |= SAI_xCR1_DMAEN;
+    status = 0;
+
+    APP_NotifyTxAudioCplt(Sink_frame_size);
+  }
+
+  if ((status == 0) && (TMAPAPP_Context.num_cis_established > 0))
+  {
+    Audio_Role_t Audio_Role = TMAPAPP_Context.audio_role_setup;
+
+    LOG_INFO_APP("START AUDIO SINK (output)\n");
+
+#if (CFG_LCD_SUPPORTED == 1)
+    switch (TMAPAPP_Context.ConfiguredSampleFrequency)
+    {
+      case SAMPLE_FREQ_8000_HZ:
+        Menu_SetStreamingPage("8KHz", Audio_Role);
+        break;
+
+      case SAMPLE_FREQ_16000_HZ:
+        Menu_SetStreamingPage("16KHz", Audio_Role);
+        break;
+
+      case SAMPLE_FREQ_24000_HZ:
+        Menu_SetStreamingPage("24KHz", Audio_Role);
+        break;
+
+      case SAMPLE_FREQ_32000_HZ:
+        Menu_SetStreamingPage("32KHz", Audio_Role);
+        break;
+
+      case SAMPLE_FREQ_44100_HZ:
+        Menu_SetStreamingPage("44.1KHz", Audio_Role);
+        break;
+
+      case SAMPLE_FREQ_48000_HZ:
+        Menu_SetStreamingPage("48KHz", Audio_Role);
+        break;
+
+      default:
+        Menu_SetStreamingPage("Unknown Frequency", Audio_Role);
+        break;
+    }
+#endif /* (CFG_LCD_SUPPORTED == 1) */
+  }
+  return status;
+}
+
+void Stop_TxAudio(void)
+{
+  /* Initialize Bus which bas been released for Power consumption optimisation */
+  /* Release Bus for power consumption optimisation */
+}
+
+void BSP_AUDIO_OUT_TransferComplete_CallBack(uint32_t instance)
+{
+  APP_NotifyTxAudioCplt(Sink_frame_size);
+}
+
+void BSP_AUDIO_OUT_HalfTransfer_CallBack(uint32_t instance)
+{
+  if (MxAudioInit_Flag == 1)
+  {
+    if (Play_Req_Pause == 1)
+    {
+      /* Pause the DMA aligned on a interrupt and wait the codec trigger to restart it synchronized to BLE */
+      haudio_out_sai.Instance->CR1 &= ~SAI_xCR1_DMAEN;
+
+      Play_Req_Pause = 0;
+    }
+    else
+    {
+      APP_NotifyTxAudioHalfCplt();
+    }
   }
 }
 
@@ -739,6 +991,39 @@ int32_t Start_RxAudio(void)
     Audio_Role_t Audio_Role = TMAPAPP_Context.audio_role_setup;
 
     LOG_INFO_APP("START AUDIO SOURCE (input)\n");
+
+#if (CFG_LCD_SUPPORTED == 1)
+    switch (TMAPAPP_Context.ConfiguredSampleFrequency)
+    {
+      case SAMPLE_FREQ_8000_HZ:
+        Menu_SetStreamingPage("8KHz", Audio_Role);
+        break;
+
+      case SAMPLE_FREQ_16000_HZ:
+        Menu_SetStreamingPage("16KHz", Audio_Role);
+        break;
+
+      case SAMPLE_FREQ_24000_HZ:
+        Menu_SetStreamingPage("24KHz", Audio_Role);
+        break;
+
+      case SAMPLE_FREQ_32000_HZ:
+        Menu_SetStreamingPage("32KHz", Audio_Role);
+        break;
+
+      case SAMPLE_FREQ_44100_HZ:
+        Menu_SetStreamingPage("44.1KHz", Audio_Role);
+        break;
+
+      case SAMPLE_FREQ_48000_HZ:
+        Menu_SetStreamingPage("48KHz", Audio_Role);
+        break;
+
+      default:
+        Menu_SetStreamingPage("Unknown Frequency", Audio_Role);
+        break;
+    }
+#endif /* (CFG_LCD_SUPPORTED == 1) */
   }
   return status;
 }
