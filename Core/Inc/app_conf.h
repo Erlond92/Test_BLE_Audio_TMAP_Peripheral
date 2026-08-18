@@ -224,6 +224,7 @@
 #define CFG_PHY_PREF_RX               (HCI_RX_PHYS_LE_2M_PREF)
 
 /* USER CODE BEGIN BLE_Stack */
+#include "stm32wbaxx_hal_uart.h"
 #include "tmap_app_conf.h"
 
 /* GATT Services Configuration */
