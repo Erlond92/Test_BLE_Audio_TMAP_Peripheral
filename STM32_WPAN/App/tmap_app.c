@@ -301,7 +301,7 @@ static uint16_t APP_UnavailableAudioContexts(ASE_Type_t Type,
 static uint16_t APP_ReleasedASEStreamingAudioContexts(APP_ACL_Conn_t *pConn,APP_ASE_Info_t *pASE, uint16_t AudioContexts);
 
 static char Hex_To_Char(uint8_t Hex);
-
+void Send_Audio_To_Bluetooth(int32_t *audio_buffer_ptr);
 /* Exported functions --------------------------------------------------------*/
 extern void APP_NotifyToRun(void);
 
@@ -4226,5 +4226,38 @@ static char Hex_To_Char(uint8_t Hex)
   else
   {
     return (char) Hex + 55;
+  }
+}
+
+/* Добавьте эту функцию в файл, где есть доступ к TMAPAPP_Context */
+void Send_Audio_To_Bluetooth(int32_t *audio_buffer_ptr)
+{
+  uint8_t i;
+
+  /* --- НАЧАЛО БЛОКА ОТЛАДКИ --- */
+  /* Статическая переменная сохраняет свое значение между вызовами функции */
+  static uint16_t debug_counter = 0;
+
+  debug_counter++;
+  if (debug_counter >= 100) // Если фрейм 10 мс, то 100 фреймов = 1 секунда
+  {
+    debug_counter = 0; // Сбрасываем счетчик
+
+    /* Выводим первые 4 сэмпла в десятичном виде (%ld для int32_t),
+       чтобы видеть реальную амплитуду звуковой волны */
+    LOG_INFO_APP("Mic: %ld | %ld | %ld | %ld\n",
+                 audio_buffer_ptr[0],
+                 audio_buffer_ptr[1],
+                 audio_buffer_ptr[2],
+                 audio_buffer_ptr[3]);
+  }
+  /* Проходим по всем возможным подключениям (наушникам) */
+  for (i = 0; i < APP_MAX_NUM_CIS; i++)
+  {
+    /* Если соединение установлено */
+    if (TMAPAPP_Context.cis_src_handle[i] != 0xFFFFu)
+    {
+      CODEC_SendData(TMAPAPP_Context.cis_src_handle[i], 1, audio_buffer_ptr);
+    }
   }
 }

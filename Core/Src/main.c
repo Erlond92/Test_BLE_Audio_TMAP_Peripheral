@@ -51,7 +51,6 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define FRAME_SIZE 320 // Зависит от вашего LC3 фрейма
-#define DMA_BUFFER_SIZE  640 // Размер буфера (подбирается под кодек)
 
 /* USER CODE END PD */
 
@@ -78,10 +77,12 @@ UART_HandleTypeDef huart1;
 DMA_HandleTypeDef handle_GPDMA1_Channel0;
 
 /* USER CODE BEGIN PV */
-int32_t mic_dma_buffer[DMA_BUFFER_SIZE];
 
-__attribute__((aligned(8))) uint8_t lc3_enc_handle[LC3_ENCODER_STRUCT_SIZE_48kHz];
-__attribute__((aligned(8))) uint8_t lc3_enc_stack[LC3_ENCODER_STACK_SIZE_48kHz];
+uint32_t lc3_session_handle[(1000 + 3) / 4];
+
+uint32_t lc3_enc_handle[(LC3_ENCODER_STRUCT_SIZE_48kHz + 3) / 4];
+uint32_t lc3_enc_stack[(LC3_ENCODER_STACK_SIZE_48kHz + 3) / 4];
+
 uint8_t lc3_encoded_bytes[120];
 
 volatile uint8_t debug_print_flag = 0;
@@ -93,33 +94,35 @@ uint16_t debug_lc3_length = 0;
 
 int32_t mic_dma_buffer[FRAME_SIZE * 2];
 int16_t pcm_16bit_buffer[FRAME_SIZE];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
+void Process_Audio_Frame(int32_t* input_32, int16_t* output_16, uint16_t size);
 /* USER CODE BEGIN PFP */
 extern void Encode_And_Send_Audio(int32_t *raw_dma_buffer);
-void Process_Audio_Frame(int32_t* input_32, int16_t* output_16, uint16_t size);
+extern void Send_Audio_To_Bluetooth(int32_t *audio_buffer_ptr);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
-  Process_Audio_Frame(&mic_dma_buffer[0], pcm_16bit_buffer, FRAME_SIZE);
+  if (hsai->Instance == SAI1_Block_B)
+  {
+    /* Отдаем ПЕРВУЮ половину буфера прямо в Bluetooth! */
+    Send_Audio_To_Bluetooth(&mic_dma_buffer[0]);
+  }
 }
 
 void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_B)
   {
-    for(int i = 0; i < 8; i++)
-    {
-      debug_raw_samples[i] = mic_dma_buffer[FRAME_SIZE + i];
-    }
-    debug_print_flag = 1;
-    Process_Audio_Frame(&mic_dma_buffer[FRAME_SIZE], pcm_16bit_buffer, FRAME_SIZE);
+    /* Отдаем ВТОРУЮ половину буфера прямо в Bluetooth! */
+    Send_Audio_To_Bluetooth(&mic_dma_buffer[FRAME_SIZE]);
   }
 }
 /* USER CODE END 0 */
@@ -170,7 +173,7 @@ int main(void) {
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  if (HAL_SAI_Receive_DMA(&hsai_BlockB1, (uint8_t*)mic_dma_buffer, DMA_BUFFER_SIZE) != HAL_OK)
+  if (HAL_SAI_Receive_DMA(&hsai_BlockB1, (uint8_t*)mic_dma_buffer, FRAME_SIZE*2) != HAL_OK)
   {
     Error_Handler();
   }
