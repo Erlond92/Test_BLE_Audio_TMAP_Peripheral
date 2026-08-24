@@ -95,6 +95,8 @@ void AudioClock_Init(uint32_t frequency);
 void PLL_Exit(void);
 int32_t Start_RxAudio(void);
 void Stop_RxAudio(void);
+int32_t Start_TxAudio(void);
+void Stop_TxAudio(void);
 void APP_NotifyRxAudioCplt(uint16_t AudioFrameSize);
 void APP_NotifyRxAudioHalfCplt(void);
 void APP_NotifyTxAudioCplt(uint16_t AudioFrameSize);

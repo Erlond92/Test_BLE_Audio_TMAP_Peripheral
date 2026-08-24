@@ -224,6 +224,7 @@
 #define CFG_PHY_PREF_RX               (HCI_RX_PHYS_LE_2M_PREF)
 
 /* USER CODE BEGIN BLE_Stack */
+#include "stm32wbaxx_hal_uart.h"
 #include "tmap_app_conf.h"
 
 /* GATT Services Configuration */
@@ -266,7 +267,13 @@
 #define CFG_LPM_STDBY_WAKEUP_TIME (1500U)
 
 /* USER CODE BEGIN Low_Power 0 */
+#undef CFG_LPM_LEVEL
+#undef CFG_LPM_STOP1_SUPPORTED
+#undef CFG_LPM_STANDBY_SUPPORTED
 
+#define CFG_LPM_LEVEL               (0U)
+#define CFG_LPM_STOP1_SUPPORTED     (0U)
+#define CFG_LPM_STANDBY_SUPPORTED   (0U)
 /* USER CODE END Low_Power 0 */
 
 /**
@@ -544,6 +551,8 @@ typedef enum
 /* USER CODE END MEMORY_MANAGER_Configuration */
 
 /* USER CODE BEGIN Defines */
+#undef STM32WBA55xx
+
 #define CFG_BSP_ON_SEQUENCER                    (1)
 #define CFG_BSP_ON_DISCOVERY                    (0)
 
@@ -586,7 +595,7 @@ typedef enum
 #define CODEC_LC3_NUM_SESSION                   (1u)
 
 #define CODEC_LC3_NUM_ENCODER_CHANNEL           (1u)
-#define CODEC_LC3_NUM_DECODER_CHANNEL           (2u)
+#define CODEC_LC3_NUM_DECODER_CHANNEL           (0u)
 
 #define CODEC_MNGR_INTR_NUM                     COMP_IRQn      /* Vector used for codec execution */
 #define CODEC_MNGR_INTR_PRIO                    (15)

@@ -21,6 +21,24 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "LC3_encoder.h"
+#include "log_module.h"
+#include "log_module_conf.h"
+#include "stm32wbaxx_hal.h"
+#include "stm32wbaxx_hal_cortex.h"
+#include "stm32wbaxx_hal_crc.h"
+#include "stm32wbaxx_hal_dma.h"
+#include "stm32wbaxx_hal_dma_ex.h"
+#include "stm32wbaxx_hal_flash.h"
+#include "stm32wbaxx_hal_pwr.h"
+#include "stm32wbaxx_hal_pwr_ex.h"
+#include "stm32wbaxx_hal_ramcfg.h"
+#include "stm32wbaxx_hal_rcc.h"
+#include "stm32wbaxx_hal_rtc.h"
+#include "stm32wbaxx_hal_sai.h"
+#include "stm32wbaxx_hal_uart.h"
+#include "stm32wbaxx_ll_icache.h"
+#include "stm32wbaxx_ll_pwr.h"
 #include "stm32wbaxx_nucleo.h"
 
 /* USER CODE END Includes */
@@ -32,6 +50,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define FRAME_SIZE 320 // Зависит от вашего LC3 фрейма
 
 /* USER CODE END PD */
 
@@ -49,32 +68,70 @@ RAMCFG_HandleTypeDef hramcfg_SRAM2;
 
 RTC_HandleTypeDef hrtc;
 
+SAI_HandleTypeDef hsai_BlockB1;
+DMA_NodeTypeDef Node_GPDMA1_Channel1;
+DMA_QListTypeDef List_GPDMA1_Channel1;
+DMA_HandleTypeDef handle_GPDMA1_Channel1;
+
 UART_HandleTypeDef huart1;
 DMA_HandleTypeDef handle_GPDMA1_Channel0;
 
 /* USER CODE BEGIN PV */
+
+uint32_t lc3_session_handle[(1000 + 3) / 4];
+
+uint32_t lc3_enc_handle[(LC3_ENCODER_STRUCT_SIZE_48kHz + 3) / 4];
+uint32_t lc3_enc_stack[(LC3_ENCODER_STACK_SIZE_48kHz + 3) / 4];
+
+uint8_t lc3_encoded_bytes[120];
+
+volatile uint8_t debug_print_flag = 0;
+int32_t debug_raw_samples[8];
+
+volatile uint8_t debug_lc3_flag = 0;
+uint8_t debug_lc3_data[8];
+uint16_t debug_lc3_length = 0;
+
+int32_t mic_dma_buffer[FRAME_SIZE * 2];
+int16_t pcm_16bit_buffer[FRAME_SIZE];
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
+void Process_Audio_Frame(int32_t* input_32, int16_t* output_16, uint16_t size);
 /* USER CODE BEGIN PFP */
-
+extern void Encode_And_Send_Audio(int32_t *raw_dma_buffer);
+extern void Send_Audio_To_Bluetooth(int32_t *audio_buffer_ptr);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
+{
+  if (hsai->Instance == SAI1_Block_B)
+  {
+    /* Отдаем ПЕРВУЮ половину буфера прямо в Bluetooth! */
+    Send_Audio_To_Bluetooth(&mic_dma_buffer[0]);
+  }
+}
 
+void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
+{
+  if (hsai->Instance == SAI1_Block_B)
+  {
+    /* Отдаем ВТОРУЮ половину буфера прямо в Bluetooth! */
+    Send_Audio_To_Bluetooth(&mic_dma_buffer[FRAME_SIZE]);
+  }
+}
 /* USER CODE END 0 */
 
 /**
   * @brief  The application entry point.
   * @retval int
   */
-int main(void)
-{
-
+int main(void) {
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -106,6 +163,7 @@ int main(void)
   MX_RAMCFG_Init();
   MX_RTC_Init();
   MX_ICACHE_Init();
+  MX_SAI1_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -115,16 +173,29 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
+  if (HAL_SAI_Receive_DMA(&hsai_BlockB1, (uint8_t*)mic_dma_buffer, FRAME_SIZE*2) != HAL_OK)
   {
-
-    /* USER CODE END WHILE */
-    MX_APPE_Process();
-
-    /* USER CODE BEGIN 3 */
+    Error_Handler();
   }
 
-  /* USER CODE END 3 */
+  while (1)
+  {
+    MX_APPE_Process(); // Обработка Bluetooth (оставляем обязательно)
+
+    /* USER CODE BEGIN 3 */
+    if (debug_print_flag == 1)
+    {
+      debug_print_flag = 0; /* Сбрасываем флаг */
+
+      /* Выводим 8 сырых 32-битных значений через пробел */
+      LOG_INFO_APP("Raw: %ld %ld %ld %ld %ld %ld %ld %ld\r\n",
+             debug_raw_samples[0], debug_raw_samples[1],
+             debug_raw_samples[2], debug_raw_samples[3],
+             debug_raw_samples[4], debug_raw_samples[5],
+             debug_raw_samples[6], debug_raw_samples[7]);
+    }
+    /* USER CODE END 3 */
+  }
 }
 
 /**
@@ -154,13 +225,15 @@ void SystemClock_Config(void)
 
   /** Initializes the CPU, AHB and APB busses clocks
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSE
-                              |RCC_OSCILLATORTYPE_LSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI
+                              |RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.HSEDiv = RCC_HSE_DIV1;
   RCC_OscInitStruct.LSEState = RCC_LSE_ON;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.LSIState = RCC_LSI1_ON;
+  RCC_OscInitStruct.LSIDiv = RCC_LSI_DIV1;
   RCC_OscInitStruct.PLL1.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL1.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL1.PLLM = 5;
@@ -179,7 +252,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
                               |RCC_CLOCKTYPE_PCLK7|RCC_CLOCKTYPE_HCLK5;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSE;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
@@ -187,13 +260,13 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.AHB5_PLL1_CLKDivider = RCC_SYSCLK_PLL1_DIV1;
   RCC_ClkInitStruct.AHB5_HSEHSI_CLKDivider = RCC_SYSCLK_HSEHSI_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
   {
     Error_Handler();
   }
 
    /* Select SysTick source clock */
-  HAL_SYSTICK_CLKSourceConfig(SYSTICK_CLKSOURCE_LSE);
+  HAL_SYSTICK_CLKSourceConfig(SYSTICK_CLKSOURCE_LSI);
 
    /* Re-Initialize Tick with new clock source */
   if (HAL_InitTick(TICK_INT_PRIORITY) != HAL_OK)
@@ -272,6 +345,8 @@ void MX_GPDMA1_Init(void)
   /* GPDMA1 interrupt Init */
     HAL_NVIC_SetPriority(GPDMA1_Channel0_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(GPDMA1_Channel0_IRQn);
+    HAL_NVIC_SetPriority(GPDMA1_Channel1_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(GPDMA1_Channel1_IRQn);
 
   /* USER CODE BEGIN GPDMA1_Init 1 */
 
@@ -335,11 +410,19 @@ void MX_RAMCFG_Init(void)
   {
     Error_Handler();
   }
+  if (HAL_RAMCFG_ConfigWaitState(&hramcfg_SRAM1, RAMCFG_WAITSTATE_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
   /** Initialize RAMCFG SRAM2
   */
   hramcfg_SRAM2.Instance = RAMCFG_SRAM2;
   if (HAL_RAMCFG_Init(&hramcfg_SRAM2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_RAMCFG_ConfigWaitState(&hramcfg_SRAM2, RAMCFG_WAITSTATE_1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -420,6 +503,42 @@ void MX_RTC_Init(void)
 }
 
 /**
+  * @brief SAI1 Initialization Function
+  * @param None
+  * @retval None
+  */
+void MX_SAI1_Init(void)
+{
+
+  /* USER CODE BEGIN SAI1_Init 0 */
+
+  /* USER CODE END SAI1_Init 0 */
+
+  /* USER CODE BEGIN SAI1_Init 1 */
+
+  /* USER CODE END SAI1_Init 1 */
+  hsai_BlockB1.Instance = SAI1_Block_B;
+  hsai_BlockB1.Init.AudioMode = SAI_MODEMASTER_RX;
+  hsai_BlockB1.Init.Synchro = SAI_ASYNCHRONOUS;
+  hsai_BlockB1.Init.OutputDrive = SAI_OUTPUTDRIVE_DISABLE;
+  hsai_BlockB1.Init.NoDivider = SAI_MASTERDIVIDER_ENABLE;
+  hsai_BlockB1.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_HF;
+  hsai_BlockB1.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_16K;
+  hsai_BlockB1.Init.SynchroExt = SAI_SYNCEXT_DISABLE;
+  hsai_BlockB1.Init.MckOutput = SAI_MCK_OUTPUT_DISABLE;
+  hsai_BlockB1.Init.MonoStereoMode = SAI_STEREOMODE;
+  hsai_BlockB1.Init.CompandingMode = SAI_NOCOMPANDING;
+  if (HAL_SAI_InitProtocol(&hsai_BlockB1, SAI_I2S_STANDARD, SAI_PROTOCOL_DATASIZE_24BIT, 2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SAI1_Init 2 */
+
+  /* USER CODE END SAI1_Init 2 */
+
+}
+
+/**
   * @brief USART1 Initialization Function
   * @param None
   * @retval None
@@ -480,102 +599,49 @@ void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
-  LL_DBGMCU_DisableDBGStopMode();
-  LL_DBGMCU_DisableDBGStandbyMode();
 
   /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
-HAL_StatusTypeDef MX_SPI3_Init(SPI_HandleTypeDef* phspi, uint32_t BaudratePrescaler)
+void Encode_And_Send_Audio(int32_t *raw_dma_buffer)
 {
-  HAL_StatusTypeDef ret = HAL_OK;
+  LC3_Status status;
+  status = lc3_encoder_process(lc3_enc_handle,
+                               lc3_enc_stack,
+                               raw_dma_buffer,
+                               2, /* Пропуск правого канала I2S */
+                               lc3_encoded_bytes);
 
-  phspi->Init.Mode                    = SPI_MODE_MASTER;
-  phspi->Init.Direction               = SPI_DIRECTION_1LINE;
-  phspi->Init.DataSize                = SPI_DATASIZE_8BIT;
-  phspi->Init.CLKPolarity             = SPI_POLARITY_LOW;
-  phspi->Init.CLKPhase                = SPI_PHASE_1EDGE;
-  phspi->Init.NSS                     = SPI_NSS_SOFT;
-  phspi->Init.BaudRatePrescaler       = SPI_BAUDRATEPRESCALER_4;
-  phspi->Init.FirstBit                = SPI_FIRSTBIT_MSB;
-  phspi->Init.TIMode                  = SPI_TIMODE_DISABLE;
-  phspi->Init.CRCCalculation          = SPI_CRCCALCULATION_DISABLE;
-  phspi->Init.CRCPolynomial           = 7;
-  phspi->Init.NSSPMode                = SPI_NSS_PULSE_DISABLE;
-  phspi->Init.NSSPolarity             = SPI_NSS_POLARITY_LOW;
-  phspi->Init.FifoThreshold           = SPI_FIFO_THRESHOLD_01DATA;
-  phspi->Init.MasterSSIdleness        = SPI_MASTER_SS_IDLENESS_00CYCLE;
-  phspi->Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_00CYCLE;
-  phspi->Init.MasterReceiverAutoSusp  = SPI_MASTER_RX_AUTOSUSP_DISABLE;
-  phspi->Init.MasterKeepIOState       = SPI_MASTER_KEEP_IO_STATE_DISABLE;
-  phspi->Init.IOSwap                  = SPI_IO_SWAP_DISABLE;
-  phspi->Init.ReadyMasterManagement   = SPI_RDY_MASTER_MANAGEMENT_INTERNALLY;
-  phspi->Init.ReadyPolarity           = SPI_RDY_POLARITY_HIGH;
-
-  if (HAL_SPI_Init(phspi) != HAL_OK)
+  if (status == 0) /* 0 обычно означает LC3_OK */
   {
-    ret = HAL_ERROR;
-  }
-
-  return ret;
-}
-
-#if (CFG_JOYSTICK_SUPPORTED == 1)
-HAL_StatusTypeDef MX_ADC4_Init(ADC_HandleTypeDef* hadc, MX_ADC_Config_t *MXInit)
-{
-  HAL_StatusTypeDef status = HAL_ERROR;
-
-  if (MXInit->ContinuousConvMode == ENABLE)
-  {
-     /* configuration with high speed conversion not suitable for continuous mode */
-     Error_Handler();
-  }
-
-  /* ADC Config */
-  hadc->Init.ClockPrescaler        = ADC_CLOCK_ASYNC_DIV1;
-  hadc->Init.Resolution            = ADC_RESOLUTION_12B;
-  hadc->Init.DataAlign             = ADC_DATAALIGN_RIGHT;
-  hadc->Init.ScanConvMode          = ADC_SCAN_DISABLE;
-  hadc->Init.EOCSelection          = ADC_EOC_SINGLE_CONV;
-  hadc->Init.LowPowerAutoWait      = DISABLE;
-  hadc->Init.LowPowerAutoPowerOff  = DISABLE;
-  hadc->Init.LowPowerAutonomousDPD = ADC_LP_AUTONOMOUS_DPD_DISABLE;
-  hadc->Init.ContinuousConvMode    = MXInit->ContinuousConvMode;
-  hadc->Init.NbrOfConversion       = 1;
-  hadc->Init.DiscontinuousConvMode = DISABLE;
-  hadc->Init.ExternalTrigConv      = ADC_SOFTWARE_START;
-  hadc->Init.ExternalTrigConvEdge  = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc->Init.DMAContinuousRequests = DISABLE;
-  hadc->Init.Overrun               = ADC_OVR_DATA_OVERWRITTEN;
-  hadc->Init.SamplingTimeCommon1   = ADC_SAMPLETIME_12CYCLES_5;
-  hadc->Init.SamplingTimeCommon2   = ADC_SAMPLETIME_12CYCLES_5;
-  hadc->Init.OversamplingMode      = DISABLE;
-  hadc->Init.TriggerFrequencyMode  = ADC_TRIGGER_FREQ_LOW;
-
-  /* Initialize ADC */
-  if (HAL_ADC_Init(hadc) == HAL_OK)
-  {
-    if (HAL_ADCEx_Calibration_Start(hadc) == HAL_OK)
+    if (debug_lc3_flag == 0)
     {
-      /* Select the ADC Channel to be converted */
-      ADC_ChannelConfTypeDef sConfig;
-      sConfig.Channel      = JOY1_ADC_CHANNEL;
-      sConfig.Rank         = ADC_REGULAR_RANK_1;
-      sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
-      /* Return Joystick initialization status */
-      status = HAL_ADC_ConfigChannel(hadc, &sConfig);
+      debug_lc3_length = 40;
+
+      for(int i = 0; i < 8; i++)
+      {
+        debug_lc3_data[i] = lc3_encoded_bytes[i];
+      }
+      debug_lc3_flag = 1;
     }
   }
-
-  return status;
 }
-#endif /* CFG_JOYSTICK_SUPPORTED == 1 */
 
+void Process_Audio_Frame(int32_t* input_32, int16_t* output_16, uint16_t size)
+{
+  for(uint16_t i = 0; i < size; i++)
+  {
+    /* Сдвигаем 32-битное значение вправо на 16 бит.
+       Это отбросит младшие шумы микрофона и оставит
+       самые старшие (громкие) 16 бит звука. */
+    output_16[i] = (int16_t)(input_32[i] >> 16);
+  }
+}
 /* USER CODE END 4 */
 
 /**
@@ -604,7 +670,7 @@ void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+     ex: LOG_INFO_APP("Wrong parameters value: file %s on line %d\r\n", file, line) */
   Error_Handler();
   /* USER CODE END 6 */
 }

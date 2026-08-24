@@ -308,13 +308,9 @@ void APP_BLE_Init(void)
   /* Initialize the Audio Stack */
   APP_AUDIO_STACK_Init();
 
-#if (CFG_LCD_SUPPORTED == 1)
-  Menu_Config();
-#else
   TMAPAPP_Init(0);
-  uint8_t status = TMAPAPP_StartAdvertising(CAP_GENERAL_ANNOUNCEMENT, 0, GAP_APPEARANCE_HEADPHONES);
+  uint8_t status = TMAPAPP_StartAdvertising(CAP_GENERAL_ANNOUNCEMENT, 0, 0x0840u);
   LOG_INFO_APP("TMAPAPP_StartAdvertising() returns status 0x%02X\n",status);
-#endif /* (CFG_LCD_SUPPORTED == 1) */
 
   /* USER CODE END APP_BLE_Init_2 */
 
